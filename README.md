@@ -1,4 +1,3 @@
-
 Prufh is a minimal 32 bit Forth language with 16 bit addresses 
 for the pruss coprocessors found on TI chips such as those used 
 on the beaglebone black. More properly, it is a threaded language 
@@ -201,6 +200,7 @@ Nonstandard words
 
 
 TODO
+
     Add HW interface words
     Support running both pru coprocessors at the same time.
     Add quiet mode to prufh_term.
