@@ -1,7 +1,7 @@
 /*
     prufh_term.c                                                        
                                                                         
- Copyright 1999 John C Silvia                                           
+ Copyright 2013 John C Silvia                                           
                                                                         
  This file is part of prufh.                                            
                                                                         
