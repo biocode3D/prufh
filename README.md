@@ -118,8 +118,6 @@ Differences from Forth
 
     There is no support for strings. 
 
-    Stack comments are not supported.
-
 
 
 Current Limitations
@@ -205,7 +203,7 @@ Nonstandard words
 
     setgpio     ( n -- ) set pin #n high
 
-    clrglpio    ( n -- ) set pin #n low
+    clrgpio     ( n -- ) set pin #n low
 
 
 
@@ -213,6 +211,5 @@ TODO
     Add HW configuration and interrupt words
     Support running both pru coprocessors at the same time.
     Add quiet mode to prufh_term.
-    Permit stack comments.
     Multitasking ?
 

@@ -293,6 +293,9 @@ sub compile {
         /^\s*#\S+/ and do {print TXT $_; next;};
         /^\s*\.(?!endm)\S+/ and do {print TXT $_; next;};
 
+        # eliminate stack comments
+        s/\s+\(\s+.*\s*--\s+.*\s*\)//;
+
         # parse each line
         my @line = split();
         foreach (@line) {

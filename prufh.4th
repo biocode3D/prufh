@@ -78,7 +78,7 @@ INITIALIZATION:
     xout    0, R25, 1       
     // now fall through to abort
 
-:CODE abort
+:CODE abort             ( -- )
     // clear input area in shared memory 
     xor     $x, $x, $x
     xor     $y, $y, $y
@@ -99,28 +99,28 @@ INITIALIZATION:
     clr     $ip, $ip, data_address_flag
     jmp     NEXT
 
-:CODE halt
+:CODE halt              ( -- )
     halt
 
-:CODE exit                     // compiled by ; also can be used in recursion
+:CODE exit              ( -- )  // compiled by ; also can be used in recursion
     lbbo    $ip, $rsp, 0, 2
     add	    $rsp, $rsp, 2
 ;CODE
 
-:CODE lit
+:CODE lit               ( -- n )
     PUSH
     lbbo	$tos, $ip, 2, 4 	// move lit value to top of stack
     add	    $ip, $ip, 4		    // set instruction pointer past lit value
 ;CODE
 
-:CODE dovar
+:CODE dovar             ( -- addr )
     PUSH
     add	    $ip, $ip, 2
     ldi     $tos.w2, 0x0000
     lbbo	$tos.w0, $ip, 0, 2
 ;CODE
 
-:CODE doconst
+:CODE doconst           ( -- n )
     PUSH
     add	    $ip, $ip, 2
     ldi     $tos.w2, 0x0000
@@ -128,50 +128,50 @@ INITIALIZATION:
     lbbo    $tos, $tos, 0, 4
 ;CODE
 
-:CODE dup
+:CODE dup               ( n1 -- n1 n1 )
     PUSH    
 ;CODE
 
-:CODE drop
+:CODE drop              ( n -- )
     POP
 ;CODE
 
-:CODE swap	
+:CODE swap	            ( n1 n2 -- n2 n1 )
     mov     $x, $tos
     lbbo	$tos, $psp, 0, 4
     sbbo	$x, $psp, 0, 4
 ;CODE
 
-:CODE over
+:CODE over              ( n1 n2 -- n1 n2 n1 )
     sbbo	$tos, $psp, 4, 4
     lbbo	$tos, $psp, 0, 4
     add	    $psp, $psp, 4
 ;CODE
 
-:CODE nip
+:CODE nip               ( n1 n2 -- n2 )
     sub	    $psp, $psp, 4
 ;CODE
 
-:CODE tuck
+:CODE tuck              ( n1 n2 -- n2 n1 n2 )
     lbbo    $x, $psp, 0, 4
     sbbo    $tos, $psp, 0, 4
     add     $psp, $psp, 4
     sbbo    $x, $psp, 0, 4
 ;CODE
 
-:CODE 2drop
+:CODE 2drop             ( n, n -- )
     sub	    $psp, $psp, 8
     lbbo	$tos, $psp, 4, 4
 ;CODE
 
-:CODE 2dup
+:CODE 2dup              ( n1 n2 -- n1 n2 n1 n2 )
     sbbo	$tos, $psp, 4, 4
     lbbo	$x, $psp, 0, 4
     add	    $psp, $psp, 8
     sbbo	$x, $psp, 0, 4
 ;CODE
 
-:CODE rot
+:CODE rot               ( n1 n2 n3 -- n2 n3 n1)
     sub     $x, $psp, 4
     lbbo    $z, $x, 0, 4
     lbbo    $y, $psp, 0, 4
@@ -180,7 +180,7 @@ INITIALIZATION:
     mov     $tos, $z
 ;CODE
 
-:CODE -rot
+:CODE -rot              ( n1 n2 n3 -- n3 n1 n2 )
     sub     $x, $psp, 4
     lbbo    $y, $x, 0, 4
     sbbo    $tos, $x, 0, 4
@@ -188,13 +188,14 @@ INITIALIZATION:
     sbbo    $y, $psp, 0, 4
 ;CODE
 
-:CODE pick
+:CODE pick              ( nu ... n0 u -- nu ... n0 nu ) 
     lsl     $tos, $tos, 2
     sub     $x, $psp, $tos
     lbbo    $tos, $x, 0, 4
 ;CODE
 
-:CODE roll
+:CODE roll              ( nu ... n0 n -- nu-1 ... n0 nu )
+    lsl     $tos, $tos, 2
     lsl     $tos, $tos, 2
     sub     $x, $psp, $tos.b0
     lbbo    $tos, $x, 0, 4
@@ -206,46 +207,46 @@ ROLLONE:
     sub     $psp, $psp, 4
 ;CODE
 
-:CODE +
+:CODE +                 ( n1 n2 -- n3 )
     lbbo	$x, $psp, 0, 4
     add	    $tos, $tos, $x
     sub	    $psp, $psp, 4
 ;CODE
 
-:CODE -
+:CODE -                 ( n1 n2 -- n3 )
     lbbo	$x, $psp, 0, 4
     sub	    $tos, $x, $tos
     sub	    $psp, $psp, 4
 ;CODE
 
-:CODE @
+:CODE @                 ( a -- n )
     lbbo	$tos, $tos, 0, 4
 ;CODE
 
-:CODE !
+:CODE !                 ( n a -- )
     lbbo	$x, $psp, 0, 4
     sbbo 	$x, $tos, 0, 4
     sub	    $psp, $psp, 8
     lbbo	$tos, $psp, 4, 4
 ;CODE 
 
-:CODE C@
+:CODE C@                ( a -- n )
     lbbo	$tos, $tos, 0, 1
 ;CODE
 
-:CODE C!
+:CODE C!                ( n a -- )
     lbbo	$x, $psp, 0, 4
     sbbo 	$x, $tos, 0, 1
     sub	    $psp, $psp, 8
     lbbo	$tos, $psp, 4, 4
 ;CODE
 
-:CODE branch
+:CODE branch            ( -- )
     lbbo    $ip, $ip, 2, 2
     jmp     NEXT
 
 
-:CODE 0branch   
+:CODE 0branch           ( flag -- )
     add	    $ip, $ip, 2		    // set instr ptr to next actual instruction 
     qbne	BRANCHZERO, $tos, 0
     lbbo 	$ip, $ip, 0, 2		// override instr ptr to cfa of first branch instruction
@@ -308,7 +309,7 @@ DODONE:
     jmp     LOOPBODY
 
 // pop do loop index and limit from return stack
-:CODE unloop  // would mainly be used before "exit"
+:CODE unloop                ( -- ) // would mainly be used before "exit"
     lbbo    $limit, $rsp, 4, 4
     lbbo    $index, $rsp, 0, 4
     add     $rsp, $rsp, 8
@@ -322,65 +323,65 @@ DODONE:
     lbbo 	$ip, $ip, 0, 2
     jmp     NEXT
 
-:CODE i
+:CODE i                 ( -- i )
 	PUSH
     mov     $tos, $index
 ;CODE
 
-:CODE j
+:CODE j                 ( -- j )
     PUSH
     lbbo    $tos, $rsp, 0, 4
 ;CODE
 
-:CODE k
+:CODE k                 ( -- k )
     PUSH
     lbbo    $tos, $rsp, 4, 4
 ;CODE
 
-:CODE and 
+:CODE and               ( n1 n2 -- n3 )
     lbbo	$x, $psp, 0, 4
     and	    $tos, $tos, $x
     sub 	$psp, $psp, 4
 ;CODE
 
-:CODE or
+:CODE or                ( n1 n2 -- n3 )
     lbbo	$x, $psp, 0, 4
     or	    $tos, $tos, $x
     sub 	$psp, $psp, 4
 ;CODE
 
-:CODE xor
+:CODE xor               ( n1 n2 -- n3 )
     lbbo	$x, $psp, 0, 4
     xor	    $tos, $tos, $x
     sub 	$psp, $psp, 4
 ;CODE
 
-:CODE not
+:CODE not               ( n1 -- n2 )
     not	    $tos, $tos
 ;CODE
 
-:CODE lshift
+:CODE lshift            ( n1 n2 -- n3 )
     lbbo	$x, $psp, 0, 4
     lsl	    $tos, $x, $tos
     sub 	$psp, $psp, 4
 ;CODE
 
-:CODE rshift
+:CODE rshift            ( n1 n2 -- n3 )
     lbbo	$x, $psp, 0, 4
     lsr	    $tos, $x, $tos
     sub 	$psp, $psp, 4
 ;CODE
 
-:CODE =
+:CODE =                 ( n1 n2 -- flag )
     lbbo	$x, $psp, 0, 4
     sub     $psp, $psp, 4
     qbeq    TRUE, $x, $tos
 
-FALSE:
+FALSE:          
     xor     $tos, $tos, $tos
 ;CODE
          
-:CODE <>
+:CODE <>                ( n1 n2 -- flag )
     lbbo	$x, $psp, 0, 4
     sub     $psp, $psp, 4
     qbeq    FALSE, $x, $tos
@@ -389,48 +390,48 @@ TRUE:
     mov     $tos, 0xffffffff
 ;CODE
 
-:CODE <
+:CODE <                 ( n1 n2 -- flag )
     lbbo	$x, $psp, 0, 4
     sub     $psp, $psp, 4
     qblt    TRUE, $tos, $x
     jmp     FALSE
 
-:CODE >
+:CODE >                 ( n1 n2 -- flag )
     lbbo	$x, $psp, 0, 4
     sub     $psp, $psp, 4
     qbgt    TRUE, $tos, $x
     jmp     FALSE
 
-:CODE >=
+:CODE >=                ( n1 n2 -- flag )
     lbbo	$x, $psp, 0, 4
     sub     $psp, $psp, 4
     qbge    TRUE, $tos, $x
     jmp     FALSE
 
-:CODE <=
+:CODE <=                ( n1 n2 -- flag )
     lbbo	$x, $psp, 0, 4
     sub     $psp, $psp, 4
     qble    TRUE, $tos, $x
     jmp     FALSE
 
-:CODE r@
+:CODE r@                ( -- n )
     PUSH
     lbbo 	$tos, $rsp, 0, 4
 ;CODE
 
-:CODE >r
+:CODE >r                ( n -- )
     sub	    $rsp, $rsp, 4
     sbbo 	$tos, $rsp, 0, 4
     POP
 ;CODE
 
-:CODE r>
+:CODE r>                ( -- n )
     PUSH
     lbbo 	$tos, $rsp, 0, 4
     add	    $rsp, $rsp, 4
 ;CODE
 
-:CODE +!
+:CODE +!                ( n a -- )
     lbbo    $y, $tos, 0, 4
     lbbo    $x, $psp, 0, 4
     add     $y, $y, $x
@@ -439,50 +440,50 @@ TRUE:
     lbbo    $tos, $psp, 4, 4
 ;CODE
   
-:CODE 1+
+:CODE 1+                ( n1 -- n2 )
     add     $tos, $tos, 1
 ;CODE
 
-:CODE 2+
+:CODE 2+                ( n1 -- n2 )
     add     $tos, $tos, 2
 ;CODE
 
-:CODE 1-
+:CODE 1-                ( n1 -- n2 )
     sub     $tos, $tos, 1
 ;CODE
 
-:CODE 2-
+:CODE 2-                ( n1 -- n2 )
     sub     $tos, $tos, 2
 ;CODE
 
-:CODE 2/
+:CODE 2/                ( n1 -- n2 )
     lsr     $tos, $tos, 1
 ;CODE
 
-:CODE 2*
+:CODE 2*                ( n1 -- n2 )
     lsl     $tos, $tos, 1
 ;CODE
 
-:CODE ?dup
+:CODE ?dup              ( n|0 -- n n | 0 )
     qbeq    NODUP, $tos, 0
     PUSH
 NODUP:
 ;CODE
 
-:CODE max
+:CODE max               ( n1 n2 -- n1 | n2 )
     lbbo    $x, $psp, 0, 4
     max     $tos, $tos, $x
     sub     $psp, $psp, 4
 ;CODE
 
-:CODE min
+:CODE min               ( n1 n2 -- n1 | n2 )
     lbbo    $x, $psp, 0, 4
     min     $tos, $tos, $x
     sub     $psp, $psp, 4
 ;CODE
 
     
-:CODE * 
+:CODE *                 ( n1 n2 -- d )
     lbbo    R28, $psp, 0, 4
     mov     R29, $tos
     and     $tos, $tos, $tos    // NOP to allow multiply
@@ -492,7 +493,7 @@ NODUP:
 ;CODE
 
 // long (unsigned) division -- worst-case ~= 1 microsec
-:CODE /
+:CODE /                 ( n1 n2 -- n3 )
     lbbo    $z, $psp, 0, 4
     lmbd    $x, $tos, 1
     lmbd    $y, $z, 1
@@ -514,26 +515,26 @@ SKIP:
 ;CODE
 
 // put current parameter stack address on stack
-:CODE sp@
+:CODE sp@               ( -- addr )
 	PUSH
     mov     $tos, $psp
 ;CODE
 
 // put current returns stack address on stack
-CODE rsp@
+CODE rsp@               ( -- addr )
 	PUSH
     mov     $tos, $rsp
 ;CODE
 
 // true and false here have same # of instructions as using constants
 // but use prg mem instead of data mem
-:CODE true
+:CODE true              ( -- flag )
     PUSH
     xor     $tos, $tos, $tos
     not     $tos, $tos
 ;CODE
 
-:CODE false
+:CODE false             ( -- flag )
     PUSH
     xor     $tos, $tos, $tos
 ;CODE
@@ -541,7 +542,7 @@ CODE rsp@
 // sleep for top-of-stack 10s-of-nanoseconds
 //  resolution only 20 nanoseconds however
 //  also does not account for overhead (could fix this)
-:CODE sleep
+:CODE sleep             ( n -- )
     qbgt    WAKE, $tos, 2
     lsr     $tos, $tos, 1
     xor     $x, $x, $x
@@ -555,12 +556,12 @@ WAKE:
 ;CODE
 
 // word provided to execute primitives
-: dummy
+: dummy                 ( ?? -- ?? )
     halt     // place holder, replaced by actual address at run time
 ;
 
 // execute arbitrary colon def given address on stack 
-:CODE exec
+:CODE exec              ( addr -- )
     mov     $w, $tos
     // if word is primitive, must wrap it in a colon def
     qbbs    EXCOLON, $tos, data_address_flag
@@ -572,23 +573,23 @@ EXCOLON:
     jmp     DOCOLON
 
 // Set and clear general purpose io pns
-:CODE setgpio
+:CODE setgpio               ( bn -- )
     set     R30, R30, $tos
     POP
 ;CODE
 
-:CODE clrgpio
+:CODE clrgpio               ( bn -- )
     clr     R30, R30, $tos    
     POP
 ;CODE
 
 // Is a new command available?  1 = cmd, 2 = literal
-:CODE ?command
+:CODE ?command              ( -- flag )
     PUSH
     lbco    $tos, shared_ram, cmd_avail, 4
 ;CODE
 
-:CODE @command
+:CODE @command              ( -- addr )
     PUSH
     lbco    $tos, shared_ram, cmd_value, 4
     // clear command flag
@@ -597,7 +598,7 @@ EXCOLON:
 ;CODE
 
 // Write top of stack to shared memory
-:CODE echo
+:CODE echo                  ( n -- n )
     sbco    $tos, shared_ram, emit_value, 4
     // flag new value
     ldi     $x, 0x0001
@@ -605,7 +606,7 @@ EXCOLON:
 ;CODE
 
 // Has last emit been acknowleged?
-:CODE ?read
+:CODE ?read                 ( -- flag )
     PUSH
     lbco    $tos, shared_ram, emit_avail, 4
     qbeq    RED, $tos, 0
@@ -615,11 +616,12 @@ RED:
 ;CODE
 
 
-: .
+
+: .                     ( n -- )
     echo drop ;
 
 // run command, if any, from main system
-: oblige
+: oblige                ( -- )
     ?command ?dup if
         @command
         // if flagged as command, execute -- otherwise leave on stack
@@ -636,7 +638,7 @@ RED:
 
 
 // loop waiting for commands to execute
-: main
+: main                  ( -- )
     begin
         oblige
     repeat
