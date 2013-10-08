@@ -571,6 +571,16 @@ EXCOLON:
     POP
     jmp     DOCOLON
 
+// Set and clear general purpose io pns
+:CODE setgpio
+    set     R30, R30, $tos
+    POP
+;CODE
+
+:CODE clrgpio
+    clr     R30, R30, $tos    
+    POP
+;CODE
 
 // Is a new command available?  1 = cmd, 2 = literal
 :CODE ?command
