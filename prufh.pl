@@ -24,6 +24,7 @@
 ##########################################################################
 use strict;
 use Getopt::Std;
+use FileHandle;
 
 # Register definitions
 our $tos = 'R4';
@@ -100,222 +101,18 @@ my $prgfile = $file =~ s/\.4th/.prg/r;
 my $deffile = $file =~ s/\.4th/.defs/r;
 
 
+# set up array of file handles
+my @files;      
 
-open(SOURCE, "< $file") or die "Can not open input file.\n";
 open(TXT, "> $debug") or die "Can not open debug text file.\n";
 
-# Parse soruce file 
-# builds forth dictionary and preprocesses assembly code
-while(<SOURCE>) {
-    $linenum++;         # keep track of input lines for debugging
-    my $bump = 0;       # flag assembly instruction found, will increase address
-    my $pseudo = 0;     # number of additional lines added by assembly pseudo op
-    my $fstart = $here;
-    printf TXT '%0.4u    %#0.4x    ', $linenum, $address;
-    
-    # ignore comments, blank lines, and assembler directives
-    /^\s*$/ and do {print TXT "\n"; next;};
-    /^\s*\/\// and do {print TXT "$_"; next;};
-    /^\s*\.macro\s/ and do {$macrodef = -1; print TXT "$_"; next;};
-    /^\s*#\S+/ and do {print TXT $_; next;};
-    /^\s*\.(?!endm)\S+/ and do {print TXT $_; next;};
+push (@files, openInput($file));
 
-    # parse each line
-    my @line = split();
-    foreach (@line) {
-        # record name, location of new definition
-        if($naming) {
-            $naming = 0;
-            $curname = $_;
-            if ($assembling) {
-                # def resides in program memory
-                $words{$curname} = $address ;
-                print TXT "// : $curname";
-            } else {
-                # def resides in data memory
-                $words{$curname} = $here;
-                print TXT "> : $curname";
-            }
-            next;
-        }
-        /^\/\// and last;  # skip comment lines
-
-        # compile start of new code definition
-        /^:CODE$/ and do {$naming = -1; $assembling = -1; next;};
-
-        if($assembling) {
-            # handle end of code definition by jumping to next
-            /^;CODE$/ and do {print TXT $primend; $assembling = 0; 
-                                $bump = -1; next;};
-
-            # pass assembler label on to output unchanged
-            /^.+:$/ and do { print TXT "$_ "; next;};
-
-            # macros for pushing and popping parameter stack
-            /^PUSH$/ and do { print TXT "add $psp, $psp, 4\n";
-                        printf TXT "%0.4u    %#0.4x    sbbo $tos, $psp, 0, 4",
-                        $linenum, $address + 1;
-                        $address += 2; next;};
-            /^POP$/ and do { print TXT "lbbo $tos, $psp, 0, 4\n";
-                        printf TXT "%0.4u    %#0.4x    sub $psp, $psp, 4", 
-                        $linenum, $address + 1;
-                        $address += 2; next;};
-
-            # adjust address for mov pseudo op
-            /^mov$/ and do { 
-                        # if the source op is numeric, may require 2 ops
-                        if($line[2] =~ /^[\d|#]/ ) {
-                            my $src = join(' ', @line[2..$#line]);
-                            $src =~ s/#//;
-                            $src = eval $src;
-                            $pseudo++ if $src >= 0x00010000;
-                        }
-                        print TXT "$_ "; next;};
-
-
-            # substitute register values
-            s/^\$tos(\.\S+$|,$|$)/$tos$1/;
-            s/^\$ip(\.\S+$|,$|$)/$ip$1/;
-            s/^\$psp(\.\S+$|,$|$)/$psp$1/;
-            s/^\$rsp(\.\S+$|,$|$)/$rsp$1/;
-            s/^\$w(\.\S+$|,$|$)/$w$1/;
-            s/^\$x(\.\S+$|,$|$)/$x$1/;
-            s/^\$y(\.\S+$|,$|$)/$y$1/;
-            s/^\$z(\.\S+$|,$|$)/$z$1/;
-            s/^\$limit(\.\S+$|,$|$)/$limit$1/;
-            s/^\$index(\.\S+$|,$|$)/$index$1/;
-            s/^\$incr(\.\S+$|,$|$)/$incr$1/;
-
-            # don't add macros to dictionary
-            if($macrodef) {
-                /^\s*\.endm/ and $macrodef = 0;
-                print TXT "$_ "; 
-                next;
-            }
-
-            # substitute address of special word used by "exec"
-            s/^\$dummy(\.\S+$|,$|$)/$words{'dummy'}$1/;
-
-            print TXT "$_ ";
-            $bump = -1;           # flag that instruction is using memory
-        } elsif ($compiling) {
-            # end of definition
-            /^;\s*$/ and do { $_ = 'exit'; $compiling = 0;}; 
-
-            # handle literal values in definitions
-            /^0x[0123456789abcdefABCDEF]+$/ and do { dolit($_); next;};
-            /^0b[01]+$/ and do { dolit($_); next;};
-            /^\d+$/ and do { dolit($_); next;};
-
-            # compile branching words
-            /^begin$/ and do { push(@loop, strip($here)); 
-                            print TXT "// BEGIN";next;};  
-            /^until$/ and do { push(@dictionary, $words{'0branch'});
-                            push(@dictionary, pop(@loop)); $here += 4; 
-                            print TXT "// UNTIL"; next;};
-            /^repeat$/ and do { push(@dictionary, $words{'branch'}); 
-                            $fstart = pop(@loop); 
-                            push(@dictionary, $fstart);
-                            $here += 4; 
-                            fwdref($here, $fstart, $bflag); 
-                            print TXT "// REPEAT"; next;};
-            /^while$/ and do { push(@dictionary, $words{'0branch'}); 
-                            push(@dictionary, $bflag ); $here += 4; 
-                            print TXT "// WHILE"; next;};
-
-            /^do$/ and do { push(@dictionary, $words{'(DO)'}); 
-                            $here += 2; 
-                            push(@loop, strip($here)); 
-                            print TXT "\t// DO"; next;};
-            /^\?do$/ and do { push(@dictionary, $words{'(?DO)'}); 
-                            push(@dictionary, $dflag ); 
-                            $here += 4; 
-                            push(@loop, strip($here)); 
-                            print TXT "\t// ?DO"; next;};
-            /^leave$/ and do { push(@dictionary, $words{'(LEAVE)'});
-                            push(@dictionary, $dflag ); 
-                            $here += 4;
-                            print TXT "\t// LEAVE"; next;};
-            /^loop$/ and do { push(@dictionary, $words{'(LOOP)'});
-                            $fstart = pop(@loop); 
-                            push(@dictionary, $fstart); 
-                            $here += 4; 
-                            fwdref($here, $fstart, $dflag); 
-                            print TXT "\t// LOOP"; next;};
-            /^\+loop$/ and do { push(@dictionary, $words{'(+LOOP)'}); 
-                            $fstart = pop(@loop); 
-                            push(@dictionary, $fstart); 
-                            $here += 4; 
-                            fwdref($here, $fstart, $dflag); 
-                            print TXT "\t// +LOOP"; next;};
-            /^\-loop$/ and do { push(@dictionary, $words{'(-LOOP)'}); 
-                            $fstart = pop(@loop); 
-                            push(@dictionary, $fstart); 
-                            $here += 4; 
-                            fwdref($here, $fstart, $dflag); 
-                            print TXT "\t// -LOOP"; next;};
-
-            /^if$/ and do { push(@dictionary, $words{'0branch'}); 
-                            push(@dictionary, $iflag); 
-                            push(@loop, strip($here));
-                            $here += 4; 
-                            print TXT "\t// IF"; next;};
-            /^else$/ and do { $here += 4; fwdref($here, pop(@loop), $iflag);
-                            push(@dictionary, $words{'branch'}); 
-                            push(@dictionary, $iflag); 
-                            push(@loop, strip($here));
-                            print TXT "\t// ELSE"; next;};
-            /^then$/ and do { fwdref($here, pop(@loop), $iflag); 
-                            print TXT "\t// THEN"; next;};
-
-            # compile word addresses into dictionary
-            exists $words{$_} or die "Undefined word, \"$_\", in line #$linenum\n";
-            push(@dictionary, $words{$_});
-            printf( TXT "\n%0.4u    %#0.4x    > $_", $linenum, $words{$_});
-            $here += 2;
-            if(exists $vars{$_}) {
-                push(@dictionary, $vars{$_});
-                $here += 2;
-            }
-        } else {  # not inside colon def or code def
-
-            # forth variable name
-            if($variable) {
-                $variable = 0;
-                $words{$_} = $words{'dovar'};
-                $vars{$_} = strip($here);
-                donum(0, 'variable', 'dovar');
-                next;
-            }
-            # forth constant name
-            if($constant) {         
-                $constant = 0;
-                $words{$_} = $words{'doconst'};
-                $vars{$_} = strip($here);
-                donum($value, 'constant', 'doconst');
-                next;
-            }
-
-            # start of colon definition
-            /^:\s*$/ and do {$naming = -1; $compiling = -1; next;};
-
-            # save numeric values for subsequent constant
-            /^\d+$/ and do { $value = $_; next;};       
-             /^0x[0123456789abcdefABCDEF]+$/ and do { $value = $_; next;};
-            /^0b[01]+$/ and do { $value = $_; next;};
-
-            # prepare to handle variable or constant name
-            /^variable$/ and do {$variable = -1; next;};
-            /^constant$/ and do {$constant = -1; next;};
-        }
-    }
-    $address++ if $bump;
-    $address += $pseudo;
-    print TXT "\n";
-    $bump = 0;
-    $pseudo = 0;
+while(scalar @files) {
+    compile();
 }
-close(SOURCE);
+
+
 close(TXT);
 
 # save data memory image to file
@@ -461,3 +258,238 @@ sub strip {
 sub byAddr {
    $words{$a} <=> $words{$b};
 }
+
+
+# return handle for input file
+sub openInput {
+    my ($filename) = @_;
+    my $fh = new FileHandle;
+
+    $fh->open("< $filename") or die "Can not open input file, $file.\n";
+    return $fh;
+}
+
+
+# Parse soruce file 
+# builds forth dictionary and preprocesses assembly code
+sub compile {
+    my $fh = $files[-1];
+
+    while(<$fh>) {
+        $linenum++;         # keep track of input lines for debugging
+        my $bump = 0;       # flag assembly instruction found, will increase address
+        my $pseudo = 0;     # number of additional lines added by assembly pseudo op
+        my $fstart = $here;
+        printf TXT '%0.4u    %#0.4x    ', $linenum, $address;
+
+        # include new source file
+        /^#include\s+(.*)\s*$/ and do {push(@files, openInput($1)); 
+                            $fh = $files[-1]; next;};
+        
+        # ignore comments, blank lines, and assembler directives
+        /^\s*$/ and do {print TXT "\n"; next;};
+        /^\s*\/\// and do {print TXT "$_"; next;};
+        /^\s*\.macro\s/ and do {$macrodef = -1; print TXT "$_"; next;};
+        /^\s*#\S+/ and do {print TXT $_; next;};
+        /^\s*\.(?!endm)\S+/ and do {print TXT $_; next;};
+
+        # parse each line
+        my @line = split();
+        foreach (@line) {
+            # record name, location of new definition
+            if($naming) {
+                $naming = 0;
+                $curname = $_;
+                if ($assembling) {
+                    # def resides in program memory
+                    $words{$curname} = $address ;
+                    print TXT "// : $curname";
+                } else {
+                    # def resides in data memory
+                    $words{$curname} = $here;
+                    print TXT "> : $curname";
+                }
+                next;
+            }
+            /^\/\// and last;  # skip comment lines
+
+            # compile start of new code definition
+            /^:CODE$/ and do {$naming = -1; $assembling = -1; next;};
+
+            if($assembling) {
+                # handle end of code definition by jumping to next
+                /^;CODE$/ and do {print TXT $primend; $assembling = 0; 
+                                    $bump = -1; next;};
+
+                # pass assembler label on to output unchanged
+                /^.+:$/ and do { print TXT "$_ "; next;};
+
+                # macros for pushing and popping parameter stack
+                /^PUSH$/ and do { print TXT "add $psp, $psp, 4\n";
+                            printf TXT "%0.4u    %#0.4x    sbbo $tos, $psp, 0, 4",
+                            $linenum, $address + 1;
+                            $address += 2; next;};
+                /^POP$/ and do { print TXT "lbbo $tos, $psp, 0, 4\n";
+                            printf TXT "%0.4u    %#0.4x    sub $psp, $psp, 4", 
+                            $linenum, $address + 1;
+                            $address += 2; next;};
+
+                # adjust address for mov pseudo op
+                /^mov$/ and do { 
+                            # if the source op is numeric, may require 2 ops
+                            if($line[2] =~ /^[\d|#]/ ) {
+                                my $src = join(' ', @line[2..$#line]);
+                                $src =~ s/#//;
+                                $src = eval $src;
+                                $pseudo++ if $src >= 0x00010000;
+                            }
+                            print TXT "$_ "; next;};
+
+
+                # substitute register values
+                s/^\$tos(\.\S+$|,$|$)/$tos$1/;
+                s/^\$ip(\.\S+$|,$|$)/$ip$1/;
+                s/^\$psp(\.\S+$|,$|$)/$psp$1/;
+                s/^\$rsp(\.\S+$|,$|$)/$rsp$1/;
+                s/^\$w(\.\S+$|,$|$)/$w$1/;
+                s/^\$x(\.\S+$|,$|$)/$x$1/;
+                s/^\$y(\.\S+$|,$|$)/$y$1/;
+                s/^\$z(\.\S+$|,$|$)/$z$1/;
+                s/^\$limit(\.\S+$|,$|$)/$limit$1/;
+                s/^\$index(\.\S+$|,$|$)/$index$1/;
+                s/^\$incr(\.\S+$|,$|$)/$incr$1/;
+
+                # don't add macros to dictionary
+                if($macrodef) {
+                    /^\s*\.endm/ and $macrodef = 0;
+                    print TXT "$_ "; 
+                    next;
+                }
+
+                # substitute address of special word used by "exec"
+                s/^\$dummy(\.\S+$|,$|$)/$words{'dummy'}$1/;
+
+                print TXT "$_ ";
+                $bump = -1;           # flag that instruction is using memory
+            } elsif ($compiling) {
+                # end of definition
+                /^;\s*$/ and do { $_ = 'exit'; $compiling = 0;}; 
+
+                # handle literal values in definitions
+                /^0x[0123456789abcdefABCDEF]+$/ and do { dolit($_); next;};
+                /^0b[01]+$/ and do { dolit($_); next;};
+                /^\d+$/ and do { dolit($_); next;};
+
+                # compile branching words
+                /^begin$/ and do { push(@loop, strip($here)); 
+                                print TXT "// BEGIN";next;};  
+                /^until$/ and do { push(@dictionary, $words{'0branch'});
+                                push(@dictionary, pop(@loop)); $here += 4; 
+                                print TXT "// UNTIL"; next;};
+                /^repeat$/ and do { push(@dictionary, $words{'branch'}); 
+                                $fstart = pop(@loop); 
+                                push(@dictionary, $fstart);
+                                $here += 4; 
+                                fwdref($here, $fstart, $bflag); 
+                                print TXT "// REPEAT"; next;};
+                /^while$/ and do { push(@dictionary, $words{'0branch'}); 
+                                push(@dictionary, $bflag ); $here += 4; 
+                                print TXT "// WHILE"; next;};
+
+                /^do$/ and do { push(@dictionary, $words{'(DO)'}); 
+                                $here += 2; 
+                                push(@loop, strip($here)); 
+                                print TXT "\t// DO"; next;};
+                /^\?do$/ and do { push(@dictionary, $words{'(?DO)'}); 
+                                push(@dictionary, $dflag ); 
+                                $here += 4; 
+                                push(@loop, strip($here)); 
+                                print TXT "\t// ?DO"; next;};
+                /^leave$/ and do { push(@dictionary, $words{'(LEAVE)'});
+                                push(@dictionary, $dflag ); 
+                                $here += 4;
+                                print TXT "\t// LEAVE"; next;};
+                /^loop$/ and do { push(@dictionary, $words{'(LOOP)'});
+                                $fstart = pop(@loop); 
+                                push(@dictionary, $fstart); 
+                                $here += 4; 
+                                fwdref($here, $fstart, $dflag); 
+                                print TXT "\t// LOOP"; next;};
+                /^\+loop$/ and do { push(@dictionary, $words{'(+LOOP)'}); 
+                                $fstart = pop(@loop); 
+                                push(@dictionary, $fstart); 
+                                $here += 4; 
+                                fwdref($here, $fstart, $dflag); 
+                                print TXT "\t// +LOOP"; next;};
+                /^\-loop$/ and do { push(@dictionary, $words{'(-LOOP)'}); 
+                                $fstart = pop(@loop); 
+                                push(@dictionary, $fstart); 
+                                $here += 4; 
+                                fwdref($here, $fstart, $dflag); 
+                                print TXT "\t// -LOOP"; next;};
+
+                /^if$/ and do { push(@dictionary, $words{'0branch'}); 
+                                push(@dictionary, $iflag); 
+                                push(@loop, strip($here));
+                                $here += 4; 
+                                print TXT "\t// IF"; next;};
+                /^else$/ and do { $here += 4; fwdref($here, pop(@loop), $iflag);
+                                push(@dictionary, $words{'branch'}); 
+                                push(@dictionary, $iflag); 
+                                push(@loop, strip($here));
+                                print TXT "\t// ELSE"; next;};
+                /^then$/ and do { fwdref($here, pop(@loop), $iflag); 
+                                print TXT "\t// THEN"; next;};
+
+                # compile word addresses into dictionary
+                exists $words{$_} or die "Undefined word, \"$_\", in line #$linenum\n";
+                push(@dictionary, $words{$_});
+                printf( TXT "\n%0.4u    %#0.4x    > $_", $linenum, $words{$_});
+                $here += 2;
+                if(exists $vars{$_}) {
+                    push(@dictionary, $vars{$_});
+                    $here += 2;
+                }
+            } else {  # not inside colon def or code def
+
+                # forth variable name
+                if($variable) {
+                    $variable = 0;
+                    $words{$_} = $words{'dovar'};
+                    $vars{$_} = strip($here);
+                    donum(0, 'variable', 'dovar');
+                    next;
+                }
+                # forth constant name
+                if($constant) {         
+                    $constant = 0;
+                    $words{$_} = $words{'doconst'};
+                    $vars{$_} = strip($here);
+                    donum($value, 'constant', 'doconst');
+                    next;
+                }
+
+                # start of colon definition
+                /^:\s*$/ and do {$naming = -1; $compiling = -1; next;};
+
+                # save numeric values for subsequent constant
+                /^\d+$/ and do { $value = $_; next;};       
+                 /^0x[0123456789abcdefABCDEF]+$/ and do { $value = $_; next;};
+                /^0b[01]+$/ and do { $value = $_; next;};
+
+                # prepare to handle variable or constant name
+                /^variable$/ and do {$variable = -1; next;};
+                /^constant$/ and do {$constant = -1; next;};
+            }
+        }
+        $address++ if $bump;
+        $address += $pseudo;
+        print TXT "\n";
+        $bump = 0;
+        $pseudo = 0;
+    }
+    $fh = pop(@files);
+    $fh->close;
+}
+
+

@@ -94,9 +94,14 @@ Helpful information
     It may be omitted to save space if the definition ends in a branch 
     statement AND the next intruction is :CODE
 
+    The #include directive can be used to treat code in a separate file
+    as if it were part of the including file.  This is a good way to
+    add your code to prufh.
+
     Exit prufh_term with "bye".
 
-    Use the customary -h option for more information on the use of prufh.pl or prufh_term
+    Use the customary -h option for more information on the use of prufh.pl 
+    or prufh_term
 
 
 
@@ -209,6 +214,5 @@ TODO
     Support running both pru coprocessors at the same time.
     Add quiet mode to prufh_term.
     Permit stack comments.
-    Allow include files 
     Multitasking ?
 

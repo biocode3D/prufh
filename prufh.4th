@@ -631,7 +631,8 @@ RED:
 
 // *** Application code goes here ***
 
-
+// Use #include to keep your code in a separate file
+// #include myapp.4th
 
 
 // loop waiting for commands to execute
