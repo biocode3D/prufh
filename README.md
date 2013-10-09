@@ -70,7 +70,8 @@ Getting Started
 
     If you wish to use prufh_term in your own project, it can be 
     used as is via stdin and stdout, or you can ask it to use 
-    specified io. Use ./prufh_term -h for instructions.
+    specified io. Use ./prufh_term -h for instructions. "-q" turns
+    on quiet mode which has minimal output for easier parsing.
 
 
 
@@ -210,6 +211,5 @@ Nonstandard words
 TODO
     Add HW configuration and interrupt words
     Support running both pru coprocessors at the same time.
-    Add quiet mode to prufh_term.
     Multitasking ?
 

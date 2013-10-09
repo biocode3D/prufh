@@ -57,6 +57,7 @@ static int exec(uint32_t cmd_addr, uint32_t flag);
 static void* receive(void* param);
 static int pruInit(unsigned short pruNum);
 
+static int quiet_mode = 0;
 
 unsigned int inpipe=0;
 unsigned int outpipe=1;
@@ -110,7 +111,8 @@ int main(int argc, char *argv[]) {
                 fprintf(stderr, "Dictionary entry failed on \"%s\"\n", word);
                 return EXIT_FAILURE;
             } else {
-                printf("Saved %9.9s  as   %p\n", wp->key, wp->data);
+                if (!quiet_mode) 
+                    printf("Saved %9.9s  as   %p\n", wp->key, wp->data); 
             }	    
             i++;
         }
@@ -140,24 +142,26 @@ int main(int argc, char *argv[]) {
                     // if input not defined, see if it is a number
                     cmd_addr = strtoul(word, &pEnd, 0);
                     if (pEnd == word) {
-                        printf("Unknown word, \"%s\"\n", word);
+                        fprintf(stderr, "Unknown word, \"%s\"\n", word);
                         continue;
                     } else {
                         // if a number was input, signal forth to push it
                         flag = LIT_FLAG;
-                        printf("Pushing %d\n", cmd_addr);
+                        if (!quiet_mode) 
+                            printf("Pushing %d\n", cmd_addr);
                     }
                 } else {
                     // signal that a command address is being sent
                     flag = CMD_FLAG;
                     // retrieve the address
                     cmd_addr = (uint16_t)(intptr_t)(wp->data);
-                    printf("Executing %9.9s %x\n", word, cmd_addr);
+                    if (!quiet_mode) 
+                        printf("Executing %9.9s %x\n", word, cmd_addr);
                 }
 
                 // send message to pruss
                 if (exec(cmd_addr, flag)) {
-                    printf("Unable to issue command, \"%s\"\n", word);
+                    fprintf(stderr, "Unable to issue command, \"%s\"\n", word);
                 }
             }
         }
@@ -222,9 +226,17 @@ void* receive(void* param) {
         if (ready != 0x00) {
             // check for special signal from pruss indicating a (re)start
             if (ready == 0x89abcdef) {
-                fprintf(output, "Reset: %#0.8x\n", pruSharedMem_int[FROMPRU]);
+                if (quiet_mode) {
+                    fprintf(output, "reset\n");                    
+                } else {
+                    fprintf(output, "Reset: %#0.8x\n", pruSharedMem_int[FROMPRU]);
+                }
             } else {
-                fprintf(output, "Got: %#0.8x\n", pruSharedMem_int[FROMPRU]);
+                if (quiet_mode) {
+                    fprintf(output, "%#0.8x\n", pruSharedMem_int[FROMPRU]);
+                } else {
+                    fprintf(output, "Got: %#0.8x\n", pruSharedMem_int[FROMPRU]);
+                }
             }
             // acknowledge message
             pruSharedMem_int[FROMPRU_F] = 0x00;
@@ -238,27 +250,34 @@ void* receive(void* param) {
 
 // Redirect stdin and stdout if requested at startup
 int setupIO(int argc, char *argv[]) {
+    int i;
 
-   if (argc == 2) {
-        if (strcmp(argv[1], "-h") == 0) {
-            printf("Usage: prufh_term [INPUT] [OUTPUT]\nWhere INPUT and OUTPUT are stdin, stdout, or pipe names.\nIf not present they default to stdin and stdout.\n\n");
+    for (i=1; i<argc; i++) {
+        if (strcmp(argv[i], "-h") == 0) {
+            printf("Usage: prufh_term [-q] [-i INPUT] [-o OUTPUT]\n");
+            printf("Where INPUT and OUTPUT are stdin, stdout, or pipe names.\n");
+            printf("If not present they default to stdin and stdout.\n");
+            printf("-q turns on quiet mode that prints only pru output.\n\n");
             return EXIT_SUCCESS;
         }
-    }
-
-    if (argc >= 2) {
-        if (strcmp(argv[2], "stdin") == 0) {
-            inpipe = 0;
-        } else {
-            inpipe = open(argv[1], O_RDONLY);
+        if (strcmp(argv[i], "-q") == 0) {
+            quiet_mode = 1;
         }
-    }
-    
-    if (argc >= 3) {
-        if (strcmp(argv[3], "stdout") == 0) {
-            outpipe = 1;
-        } else {
-            outpipe = open(argv[2], O_WRONLY);
+        if (strcmp(argv[i], "-i") == 0) {
+            if (strcmp(argv[i], "stdin") == 0) {
+                inpipe = 0;
+            } else {
+                inpipe = open(argv[i+1], O_RDONLY);
+            }
+            i++;
+        }
+        if (strcmp(argv[i], "-o") == 0) {
+            if (strcmp(argv[i], "stdout") == 0) {
+                inpipe = 0;
+            } else {
+                outpipe = open(argv[i+1], O_WRONLY);
+            }
+            i++;
         }
     }
     return EXIT_SUCCESS;
@@ -275,7 +294,7 @@ int pruInit(unsigned short pruNum) {
 
     // Open PRU Interrupt 
     if (prussdrv_open(PRU_EVTOUT_0) != 0) {
-        printf("prussdrv_open open failed\n");
+        fprintf(stderr, "prussdrv_open open failed\n");
         return EXIT_FAILURE;
     }
     // initialize the interrupt
