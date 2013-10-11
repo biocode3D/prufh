@@ -35,15 +35,11 @@
 #define BUFFSIZE    32
 
 #define AM33XX
-#define PRU_NUM 	0
-#define PRU_PROG    "prufh.bin"
-#define PRU_DEFS    "prufh.defs"
-#define PRU_DATA    "prufh.dat"
 
-#define TOPRU       0
-#define TOPRU_F     1
-#define FROMPRU     2
-#define FROMPRU_F   3
+#define TOPRU       0 + (0x100 * pru_num)
+#define TOPRU_F     1 + (0x100 * pru_num)
+#define FROMPRU     2 + (0x100 * pru_num)
+#define FROMPRU_F   3 + (0x100 * pru_num)
 
 #define CMD_FLAG    1
 #define LIT_FLAG    2
@@ -68,6 +64,9 @@ static volatile uint32_t *pruSharedMem_int;
 static void *pruDataMem;
 static uint16_t *pruDataMem_int;
 
+static int  pru_num = 0;
+static char filename[128];
+static int  namelen = 0;
 
 int main(int argc, char *argv[]) {
     char        *word, *pEnd;
@@ -80,12 +79,19 @@ int main(int argc, char *argv[]) {
 
     if (setupIO(argc, argv)) {
          return EXIT_FAILURE;
-     }
+    }
+
+    // if not given, use default filename
+    if (namelen == 0) {
+        strcpy(filename, "prufh");
+        namelen = 5;
+    }
+    strcat(filename, ".defs");
 
     // open list of forth word addresses
-    FILE *file = fopen(PRU_DEFS, "r");
+    FILE *file = fopen(filename, "r");
     if (file == NULL) {
-        fprintf(stderr, "Unable to open definitions file\n");
+        fprintf(stderr, "Unable to open definitions file, %s\n", filename);
         return EXIT_FAILURE;
     }
 
@@ -119,7 +125,7 @@ int main(int argc, char *argv[]) {
     }
     fclose(file);
 
-    if (pruInit(PRU_NUM) == EXIT_SUCCESS) { 
+    if (pruInit(pru_num) == EXIT_SUCCESS) { 
 
         // start seperate thread to handle forth output
         if (pthread_create(&receive_t, NULL, receive, (void*) &outpipe)) {
@@ -172,7 +178,7 @@ int main(int argc, char *argv[]) {
     pthread_join(receive_t, NULL);
 
     /* shutdown pru */
-    prussdrv_pru_disable(PRU_NUM);
+    prussdrv_pru_disable(pru_num);
     prussdrv_exit();
 
     if (outpipe != 1) {
@@ -229,13 +235,13 @@ void* receive(void* param) {
                 if (quiet_mode) {
                     fprintf(output, "reset\n");                    
                 } else {
-                    fprintf(output, "Reset: %#0.8x\n", pruSharedMem_int[FROMPRU]);
+                    fprintf(output, "Reset: %#8x\n", pruSharedMem_int[FROMPRU]);
                 }
             } else {
                 if (quiet_mode) {
-                    fprintf(output, "%#0.8x\n", pruSharedMem_int[FROMPRU]);
+                    fprintf(output, "%#8x\n", pruSharedMem_int[FROMPRU]);
                 } else {
-                    fprintf(output, "Got: %#0.8x\n", pruSharedMem_int[FROMPRU]);
+                    fprintf(output, "Got: %#8x\n", pruSharedMem_int[FROMPRU]);
                 }
             }
             // acknowledge message
@@ -254,14 +260,17 @@ int setupIO(int argc, char *argv[]) {
 
     for (i=1; i<argc; i++) {
         if (strcmp(argv[i], "-h") == 0) {
-            printf("Usage: prufh_term [-q] [-i INPUT] [-o OUTPUT]\n");
-            printf("Where INPUT and OUTPUT are stdin, stdout, or pipe names.\n");
+            printf("Usage: prufh_term [-q] [-p 0|1] [-i INPUT] [-o OUTPUT] appname\n");
+            printf("appname is the name of the program files without an extension.\n");
+            printf("INPUT and OUTPUT are stdin, stdout, or pipe names.\n");
             printf("If not present they default to stdin and stdout.\n");
+            printf("-p specifies pru # 0 or 1  (defaults to 0)\n");
             printf("-q turns on quiet mode that prints only pru output.\n\n");
-            return EXIT_SUCCESS;
+            exit(0);
         }
         if (strcmp(argv[i], "-q") == 0) {
             quiet_mode = 1;
+            continue;
         }
         if (strcmp(argv[i], "-i") == 0) {
             if (strcmp(argv[i], "stdin") == 0) {
@@ -270,15 +279,24 @@ int setupIO(int argc, char *argv[]) {
                 inpipe = open(argv[i+1], O_RDONLY);
             }
             i++;
+            continue;
         }
         if (strcmp(argv[i], "-o") == 0) {
-            if (strcmp(argv[i], "stdout") == 0) {
-                inpipe = 0;
+            if (strcmp(argv[i+1], "stdout") == 0) {
+                outpipe = 1;
             } else {
                 outpipe = open(argv[i+1], O_WRONLY);
             }
             i++;
+            continue;
         }
+        if (strcmp(argv[i], "-p") == 0) {
+            i++;
+            pru_num = atoi(argv[i]);
+            continue;
+        }
+        strncpy(filename, argv[i], 128);
+        namelen = strlen(filename);
     }
     return EXIT_SUCCESS;
 }
@@ -319,10 +337,12 @@ int pruInit(unsigned short pruNum) {
     }  
     pruDataMem_int = (uint16_t *)pruDataMem;
 
+    strcpy(&filename[namelen], ".dat");
+
     // Load dictionary into data memory
-    FILE *file = fopen(PRU_DATA, "r");
+    FILE *file = fopen(filename, "r");
     if (file == NULL) {
-        fprintf(stderr, "Unable to open dictionary file\n");
+        fprintf(stderr, "Unable to open dictionary file, %s\n", filename);
         return EXIT_FAILURE;
     }
 
@@ -332,8 +352,10 @@ int pruInit(unsigned short pruNum) {
     }
     fclose(file);
 
+    strcpy(&filename[namelen], ".bin");
+
     // start pru program
-    prussdrv_exec_program (PRU_NUM, PRU_PROG);
+    prussdrv_exec_program (pru_num, filename);
 
     return EXIT_SUCCESS;
 }

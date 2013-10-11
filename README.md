@@ -184,7 +184,7 @@ How it works (some understanding of Forth is helpful here)
 
 Nonstandard words
     
-    sleep   ( n -- ) wait for n * 10 nanoseconds
+    sleep       ( n -- ) wait for n * 10 nanoseconds
 
     ?command    ( -- flag ) is an incomming command ready?
 

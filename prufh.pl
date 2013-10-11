@@ -75,22 +75,24 @@ my $naming = 0;         # flag that a name is expected
 my $macrodef = 0;       # flag that we are in an assembly macro definition
 
 
-
 our $opt_f = "prufh.4th";  # default program name
+our $opt_p = 0;
 
 my $assembler = "";
 
-getopts("ha:f:");
+getopts("ha:f:p:");
 
 my $file = $opt_f;
 my $assembler = our $opt_a;
+my $pru_num = our $opt_p;    # which pru is being programed? 0 or 1
 
 if (our $opt_h)
 {
-    print "Usage: prufh.pl [-a ASSEMBLER] [-f SOURCE]\n\n";
+    print "Usage: prufh.pl [-p 0|1] [-a ASSEMBLER] [-f SOURCE]\n\n";
+    print "-p <number>      use pru # <number>\n";
     print "-f <file>        process file <file>\n";
     print "-a <assembler>   automatically run assembler at <file>\n\n";
-    print " Example:  ./prufh.pl -a \"../utils/pasm -V2\" -f myprufh.4th\n\n";
+    print " Example:  ./prufh.pl -p 0 -a \"../utils/pasm -V2\" -f myprufh.4th\n\n";
     exit;
 }
 
@@ -294,7 +296,10 @@ sub compile {
         /^\s*\.(?!endm)\S+/ and do {print TXT $_; next;};
 
         # eliminate stack comments
-        s/\s+\(\s+.*\s*--\s+.*\s*\)//;
+        s/\s+\((\s+.+\s+|\s+)--(\s+.+\s*|\s*)\)//;
+
+        # substitute which pru is being used
+        s/pru_num/$pru_num/g;
 
         # parse each line
         my @line = split();

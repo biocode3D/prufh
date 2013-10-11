@@ -65,7 +65,7 @@ INITIALIZATION:
     clr     R0, R0, 4
     sbco    R0, C4, 4, 4
     // init shared memory address in C28
-    ldi     R0, 0x0100
+    ldi     R0, 0x0101 + pru_num
     ldi     R1.w2, 0x0002
     ldi     R1.w0, 0x2028
     sbbo    R0, R1, 0, 4
@@ -159,7 +159,7 @@ INITIALIZATION:
     sbbo    $x, $psp, 0, 4
 ;CODE
 
-:CODE 2drop             ( n, n -- )
+:CODE 2drop             ( n n -- )
     sub	    $psp, $psp, 8
     lbbo	$tos, $psp, 4, 4
 ;CODE
@@ -171,7 +171,7 @@ INITIALIZATION:
     sbbo	$x, $psp, 0, 4
 ;CODE
 
-:CODE rot               ( n1 n2 n3 -- n2 n3 n1)
+:CODE rot               ( n1 n2 n3 -- n2 n3 n1 )
     sub     $x, $psp, 4
     lbbo    $z, $x, 0, 4
     lbbo    $y, $psp, 0, 4
