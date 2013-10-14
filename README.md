@@ -104,6 +104,9 @@ Helpful information
     Use the customary -h option for more information on the use of prufh.pl 
     or prufh_term
 
+    By default prufh runs on pru 0.  To use pru 1, compile with prufh.pl 
+    using "-p 1".  Also, run prufh_term with "-p 1".
+
 
 
 Differences from Forth
@@ -210,6 +213,5 @@ Nonstandard words
 
 TODO
     Add HW configuration and interrupt words
-    Support running both pru coprocessors at the same time.
     Multitasking ?
 

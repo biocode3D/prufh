@@ -65,13 +65,13 @@ INITIALIZATION:
     clr     R0, R0, 4
     sbco    R0, C4, 4, 4
     // init shared memory address in C28
-    ldi     R0, 0x0101 + pru_num
+    ldi     R0, 0x0100 + pru_num
     ldi     R1.w2, 0x0002
-    ldi     R1.w0, 0x2028
+    ldi     R1.w0, 0x2028  + (pru_num * 0x2000)
     sbbo    R0, R1, 0, 4
     ldi     R0, 0x0000
     ldi     R1.w2, 0x0002
-    ldi     R1.w0, 0x2020
+    ldi     R1.w0, 0x2020  + (pru_num * 0x2000)
     sbbo    R0, R1, 0, 4
     // turn on MAC unit (for multiplication)
     xor     R25, R25, R25   

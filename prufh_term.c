@@ -36,10 +36,10 @@
 
 #define AM33XX
 
-#define TOPRU       0 + (0x100 * pru_num)
-#define TOPRU_F     1 + (0x100 * pru_num)
-#define FROMPRU     2 + (0x100 * pru_num)
-#define FROMPRU_F   3 + (0x100 * pru_num)
+#define TOPRU       (0 + ((0x100 / 4) * pru_num))
+#define TOPRU_F     (1 + ((0x100 / 4) * pru_num))
+#define FROMPRU     (2 + ((0x100 / 4) * pru_num))
+#define FROMPRU_F   (3 + ((0x100 / 4) * pru_num))
 
 #define CMD_FLAG    1
 #define LIT_FLAG    2
@@ -311,17 +311,19 @@ int pruInit(unsigned short pruNum) {
     prussdrv_init();
 
     // Open PRU Interrupt 
-    if (prussdrv_open(PRU_EVTOUT_0) != 0) {
+    int pru_int = (pru_num == 0) ? PRU_EVTOUT_0 : PRU_EVTOUT_1;
+    if (prussdrv_open(pru_int) != 0) {
         fprintf(stderr, "prussdrv_open open failed\n");
         return EXIT_FAILURE;
     }
+
     // initialize the interrupt
     prussdrv_pruintc_init(&pruss_intc_initdata);
 
     // Set up shared memory area for arm--pru communication
-    prussdrv_map_prumem(PRUSS0_SHARED_DATARAM, &pruSharedMem);
+    prussdrv_map_prumem(PRUSS0_SHARED_DATARAM, &pruSharedMem); 
 
-    pruSharedMem_int =  (uint32_t *)pruSharedMem;
+    pruSharedMem_int = (uint32_t *)pruSharedMem;
 
     pruSharedMem_int[TOPRU] = 0x00;
     pruSharedMem_int[TOPRU_F] = 0x00;
