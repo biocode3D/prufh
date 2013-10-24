@@ -60,7 +60,11 @@ my $compiling = 0;      # compiling colon defs?
 
 my $variable = 0;       # flag that a variable is being created
 my $constant = 0;       # flag that a constant is being created
+my $alias = 0;          # flag that a alias is being created
+my $tick = 0;           # flag that a tick is being evaluated
+
 my $value = 0;          # value of current constant
+my $ticked = '';        # name of last word marked by tick
 
 my @dictionary;         # sequential array of word addresses (forth program)
 my @loop;               # fifo stack for resolving loop addresses
@@ -319,6 +323,17 @@ sub compile {
                 }
                 next;
             }
+
+            # handle forth "tick"
+            /\'/ and do { $tick = -1; next;};
+
+            # forth tick object
+            if($tick) {         
+                $tick = 0;
+                $ticked = $_;
+                next;
+            }
+
             /^\/\// and last;  # skip comment lines
 
             # compile start of new code definition
@@ -477,6 +492,13 @@ sub compile {
                     next;
                 }
 
+                # forth alias name
+                if($alias) {         
+                    $alias = 0;
+                    $words{$_} = $words{$ticked};
+                    next;
+                }
+
                 # start of colon definition
                 /^:\s*$/ and do {$naming = -1; $compiling = -1; next;};
 
@@ -485,9 +507,10 @@ sub compile {
                  /^0x[0123456789abcdefABCDEF]+$/ and do { $value = $_; next;};
                 /^0b[01]+$/ and do { $value = $_; next;};
 
-                # prepare to handle variable or constant name
+                # prepare to handle variable, constant, or alias name
                 /^variable$/ and do {$variable = -1; next;};
                 /^constant$/ and do {$constant = -1; next;};
+                /^alias$/ and do {$alias = -1; next;};
             }
         }
         $address++ if $bump;
